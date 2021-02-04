@@ -11,3 +11,7 @@ build/Release
 
 # Optional npm cache directory
 .npm
+
+#env
+.env
+.env.test

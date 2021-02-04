@@ -1,12 +1,14 @@
 //jshint esversion:6
+require("dotenv").config();
 const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
 const mongoose = require("mongoose");
 const encrypt = require("mongoose-encryption");
+const jwt = require("jsonwebtoken");
 
 const app = express();
-const port = 3000;
+const port = 4000;
 
 app.use(express.static("public"));
 app.set("view engine", "ejs");
@@ -26,8 +28,10 @@ const userSchema = new mongoose.Schema({
   password: String,
 });
 
-const secret = "mysecret";
-userSchema.plugin(encrypt, { secret: secret, encryptedFields: ["password"] });
+userSchema.plugin(encrypt, {
+  secret: process.env.SECRET,
+  encryptedFields: ["password"],
+});
 
 const User = new mongoose.model("User", userSchema);
 
@@ -51,7 +55,20 @@ app.post("/login", (req, res) => {
 
     if (foundUser) {
       if (foundUser.password === password) {
-        res.render("secrets");
+        const authHeader = req.headers["authorization"];
+        const token = authHeader && authHeader.split(" ")[1];
+        if (!token) {
+          return res.sendStatus(401);
+        }
+
+        jwt.verify(token, process.env.secret, (err, user) => {
+          if (err) {
+            return res.sendStatus(403);
+          }
+          res.json({ message: "success" });
+        });
+
+        //res.render("secrets");
       }
     }
   });
@@ -72,7 +89,9 @@ app.post("/register", (req, res) => {
       console.log(err);
       return;
     }
-    res.render("secrets");
+    const token = jwt.sign({ username: req.body.username }, process.env.secret);
+    return res.json({ message: "success", token });
+    //res.render("secrets");
   });
 });
 
