@@ -8,9 +8,10 @@ const session = require("express-session");
 const passport = require("passport");
 const passportLocalMongoose = require("passport-local-mongoose");
 const LocalStrategy = require("passport-local").Strategy;
+const { Passport } = require("passport");
 
 const app = express();
-const port = 3000;
+const port = 3005;
 
 app.use(express.static("public"));
 app.set("view engine", "ejs");
@@ -62,15 +63,57 @@ app.get("/login", (req, res) => {
 });
 
 app.post("/login", (req, res) => {
-  const username = req.body.username;
-  const password = req.body.password;
+  const user = new User({
+    username: req.body.username,
+    password: req.body.password,
+  });
+
+  req.login(user, (err) => {
+    if (err) {
+      console.log(err);
+      return;
+    }
+    passport.authenticate("local")(req, res, () => {
+      res.redirect("secret");
+    });
+  });
+});
+
+app.get("/logout", (req, res) => {
+  req.logout();
+  res.redirect("/");
 });
 
 app.get("/register", (req, res) => {
   res.render("register");
 });
 
-app.post("/register", (req, res) => {});
+app.get("/secret", (req, res) => {
+  if (req.isAuthenticated()) {
+    res.render("secrets");
+    return;
+  }
+
+  res.redirect("/login");
+});
+
+app.post("/register", (req, res) => {
+  console.log(req.body.password);
+  User.register(
+    { username: req.body.username },
+    req.body.password,
+    (err, user) => {
+      if (err) {
+        console.log(err);
+        res.redirect("/register");
+        return;
+      }
+      passport.authenticate("local")(req, res, () => {
+        res.redirect("/secret");
+      });
+    }
+  );
+});
 
 app.listen(port, () => {
   console.log(`Server listening at ${port}:`);
