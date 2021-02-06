@@ -4,11 +4,13 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
 const mongoose = require("mongoose");
-const encrypt = require("mongoose-encryption");
-const jwt = require("jsonwebtoken");
+const session = require("express-session");
+const passport = require("passport");
+const passportLocalMongoose = require("passport-local-mongoose");
+const LocalStrategy = require("passport-local").Strategy;
 
 const app = express();
-const port = 4000;
+const port = 3000;
 
 app.use(express.static("public"));
 app.set("view engine", "ejs");
@@ -18,22 +20,38 @@ app.use(
   })
 );
 
+app.use(
+  session({
+    secret: "my secret",
+    resave: false,
+    saveUninitialized: false,
+  })
+);
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+// mongoose
 mongoose.connect("mongodb://localhost/userDB", {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 });
+mongoose.set("useNewUrlParser", true);
+mongoose.set("useFindAndModify", false);
+mongoose.set("useCreateIndex", true);
 
 const userSchema = new mongoose.Schema({
   email: String,
   password: String,
 });
 
-userSchema.plugin(encrypt, {
-  secret: process.env.SECRET,
-  encryptedFields: ["password"],
-});
+userSchema.plugin(passportLocalMongoose);
 
 const User = new mongoose.model("User", userSchema);
+// passport config
+passport.use(new LocalStrategy(User.authenticate()));
+passport.serializeUser(User.serializeUser());
+passport.deserializeUser(User.deserializeUser());
 
 app.get("/", (req, res) => {
   res.render("home");
@@ -46,54 +64,13 @@ app.get("/login", (req, res) => {
 app.post("/login", (req, res) => {
   const username = req.body.username;
   const password = req.body.password;
-
-  User.findOne({ email: username }, (err, foundUser) => {
-    if (err) {
-      console.log(err);
-      return;
-    }
-
-    if (foundUser) {
-      if (foundUser.password === password) {
-        const authHeader = req.headers["authorization"];
-        const token = authHeader && authHeader.split(" ")[1];
-        if (!token) {
-          return res.sendStatus(401);
-        }
-
-        jwt.verify(token, process.env.secret, (err, user) => {
-          if (err) {
-            return res.sendStatus(403);
-          }
-          res.json({ message: "success" });
-        });
-
-        //res.render("secrets");
-      }
-    }
-  });
 });
 
 app.get("/register", (req, res) => {
   res.render("register");
 });
 
-app.post("/register", (req, res) => {
-  const newUser = new User({
-    email: req.body.username,
-    password: req.body.password,
-  });
-
-  newUser.save((err) => {
-    if (err) {
-      console.log(err);
-      return;
-    }
-    const token = jwt.sign({ username: req.body.username }, process.env.secret);
-    return res.json({ message: "success", token });
-    //res.render("secrets");
-  });
-});
+app.post("/register", (req, res) => {});
 
 app.listen(port, () => {
   console.log(`Server listening at ${port}:`);
